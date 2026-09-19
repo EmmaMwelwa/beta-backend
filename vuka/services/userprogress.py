@@ -1,0 +1,242 @@
+from datetime import date, datetime, timedelta, timezone
+from typing import List
+
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+from vuka.models.userprogress import UserProgress
+from vuka.repositories.userprogress import UserProgressRepository
+from vuka.repositories.verifiedassessment import VerifiedAssessmentRepository
+from vuka.repositories.registration import RegistrationRepository
+from vuka.schemas.userprogress import (
+    UserProgressCreate,
+    UserProgressUpdate,
+    ProgressSummary,
+    CategoryScore,
+    CompletedAssessment,
+    WeeklyActivityDay,
+)
+
+
+WEEKDAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"]
+
+
+class UserProgressService:
+
+    def __init__(self, db: Session):
+        self.repo = UserProgressRepository(db)
+        self.registration_repo = RegistrationRepository(db)
+        self.assessment_repo = VerifiedAssessmentRepository(db)
+
+    def _build_performance_payload(self, calculated_score: int) -> dict:
+        if 75 <= calculated_score <= 100:
+            return {
+                "performance_tier": "High",
+                "description": "Exceptional mastery of skills learnt.",
+                "what_happens_next": "Unlocks unlimited opportunities",
+                "can_retake": False,
+            }
+
+        if 50 <= calculated_score <= 74:
+            return {
+                "performance_tier": "Average",
+                "description": "Satisfactory, grasps the core concepts and meets the basic standards.",
+                "what_happens_next": "Unlocks limited opportunities",
+                "can_retake": False,
+            }
+
+        return {
+            "performance_tier": "Low",
+            "description": "Unsatisfactory, missed core concepts and need for intervention.",
+            "what_happens_next": (
+                "Does not unlock opportunities. "
+                "Given chances to retake assessments."
+            ),
+            "can_retake": True,
+        }
+
+    def _compute_streak(self, user_id: int, activity_date: date) -> int:
+        last_record = self.repo.get_most_recent(user_id)
+
+        if not last_record:
+            return 1
+
+        last_date = last_record.assessment.assessment_date.date()
+
+        gap_days = (activity_date - last_date).days
+
+        if gap_days <= 0:
+            return last_record.streak_count
+
+        if gap_days == 1:
+            return last_record.streak_count + 1
+
+        return 1
+
+    def create(self, payload: UserProgressCreate) -> UserProgress:
+
+        if not self.registration_repo.get_registration(payload.user_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        assessment = self.assessment_repo.get(payload.assessment_id)
+
+        if not assessment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Verified assessment not found",
+            )
+
+        streak_count = self._compute_streak(
+            payload.user_id,
+            assessment.assessment_date.date(),
+        )
+
+    
+        data = payload.model_dump()
+        data["streak_count"] = streak_count
+
+        return self.repo.create(data)
+
+    def get(self, progress_id: int) -> UserProgress:
+        db_obj = self.repo.get(progress_id)
+
+        if not db_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Progress record not found",
+            )
+
+        return db_obj
+
+    def get_by_id(self, progress_id: int) -> UserProgress:
+        return self.get(progress_id)
+
+    def get_all(self) -> List[UserProgress]:
+        return self.list()
+
+    def evaluate_mock_and_process(
+        self,
+        progress_id: int,
+        submission,
+    ) -> UserProgress:
+
+        progress = self.get(progress_id)
+
+        mock_score = getattr(submission, "mock_score", None)
+
+        if mock_score is not None:
+            updated_data = {
+                "score": mock_score
+            }
+
+            updated_data.update(
+                self._build_performance_payload(mock_score)
+            )
+
+            progress = self.repo.update(
+                progress,
+                updated_data,
+            )
+
+        return progress
+
+    def list(self, skip: int = 0, limit: int = 100,) -> List[UserProgress]:
+        return self.repo.list(skip, limit)
+    
+    def list_by_user(self, user_id: int,) -> List[UserProgress]:
+        return self.repo.list_by_user(user_id)
+
+    def update(self, progress_id: int, payload: UserProgressUpdate,) -> UserProgress:
+        db_obj = self.get(progress_id)
+        updates = payload.model_dump(
+            exclude_unset=True)
+
+        return self.repo.update(
+            db_obj,
+            updates,
+        )
+
+    def delete(self, progress_id: int,) -> None:
+        db_obj = self.get(progress_id)
+        self.repo.delete(db_obj)
+
+    def get_summary(
+        self,
+        user_id: int,
+    ) -> ProgressSummary:
+
+        if not self.registration_repo.get_registration(user_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        today = datetime.now(timezone.utc).date()
+
+        week_start = today - timedelta(
+            days=today.weekday()
+        )
+
+        week_end = week_start + timedelta(days=6)
+
+        active_dates = self.repo.get_active_dates_in_range(
+            user_id,
+            week_start,
+            week_end,
+        )
+
+        weekly_activity = [
+            WeeklyActivityDay(
+                weekday=WEEKDAY_LABELS[i],
+                date=week_start + timedelta(days=i),
+                completed=(
+                    week_start + timedelta(days=i)
+                ) in active_dates,
+            )
+            for i in range(7)
+        ]
+
+        most_recent = self.repo.get_most_recent(
+            user_id
+        )
+
+        current_streak = (
+            most_recent.streak_count
+            if most_recent
+            else 0
+        )
+
+        return ProgressSummary(
+            overall_progress=self.repo.get_average_score(
+                user_id
+            ),
+
+            category_breakdown=[
+                CategoryScore(
+                    category=category,
+                    average_score=avg,
+                )
+                for category, avg in self.repo.get_average_score_by_category(
+                    user_id
+                )
+            ],
+
+            current_streak=current_streak,
+
+            weekly_activity=weekly_activity,
+
+            completed_assessments=[
+                CompletedAssessment(
+                    category=category,
+                    assessment_date=d,
+                    score=score,
+                )
+                for category, d, score in self.repo.get_recent_completed(
+                    user_id,
+                    limit=5,
+                )
+            ],
+        )
