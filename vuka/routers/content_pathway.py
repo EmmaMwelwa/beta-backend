@@ -12,6 +12,14 @@ def get_pathway_service(db=Depends(get_db)):
 def create_pathway(pathway_in: ContentPathwayCreate, service: ContentPathwayService = Depends(get_pathway_service)):
     return service.generate_pathway(pathway_in)
 
+
+@router.get("/user/{user_id}", response_model=list[ContentPathwayResponse])
+def get_user_pathways(
+    user_id: int,
+    service: ContentPathwayService = Depends(get_pathway_service),
+):
+    return service.get_user_guided_pathways(user_id)
+
 @router.get("/{content_pathway_id}", response_model=ContentPathwayResponse)
 def get_pathway(content_pathway_id: int, service: ContentPathwayService = Depends(get_pathway_service)):
     return service.retrieve_pathway(content_pathway_id)

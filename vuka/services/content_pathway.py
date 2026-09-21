@@ -28,6 +28,7 @@ class ContentPathwayService:
 
         data = {
             "content_id": schema.content_id,
+            "user_id": schema.user_id,
             "external_media_url": external_media_url,
             "media_description": schema.media_description,
             "date": schema.date,
@@ -41,6 +42,11 @@ class ContentPathwayService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content pathway not found.")
 
         return pathway
+
+
+    def get_user_guided_pathways(self, user_id: int):
+        return self.repo.get_by_user(user_id)
+
 
     def modify_pathway(self, pathway_id: int, schema: ContentPathwayUpdate):
         self.retrieve_pathway(pathway_id)

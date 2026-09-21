@@ -42,3 +42,4 @@ class Registration(Base):
     )
 
     onboarding = relationship("Onboarding", back_populates="registration", uselist=False,)
+    content_pathways = relationship("ContentPathway", back_populates="user")

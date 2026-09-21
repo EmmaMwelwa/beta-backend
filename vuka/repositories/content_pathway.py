@@ -7,10 +7,19 @@ class ContentPathwayRepository:
         self.model = ContentPathway
 
     def get_by_id(self, content_pathway_id: int):
+
+
         return self.db.get(self.model, content_pathway_id)
+    def get_by_user(self, user_id: int):
+        return (
+            self.db.query(ContentPathway)
+            .filter(ContentPathway.user_id == user_id)
+            .all()
+        )
 
     def get_by_content(self, content_id: int):
         return self.db.query(self.model).filter(self.model.content_id == content_id).all()
+
 
     def create(self, data: dict):
         db_record = self.model(**data)
