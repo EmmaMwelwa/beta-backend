@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from vuka.models.userprogress import UserProgress
 from vuka.repositories.userprogress import UserProgressRepository
 from vuka.repositories.verifiedassessment import VerifiedAssessmentRepository
+from vuka.repositories.generated_assessment import GeneratedAssessmentRepository
 from vuka.repositories.registration import RegistrationRepository
 from vuka.schemas.userprogress import (
     UserProgressCreate,
@@ -16,7 +17,9 @@ from vuka.schemas.userprogress import (
     CompletedAssessment,
     WeeklyActivityDay,
 )
+import json
 
+from vuka.repositories.generated_assessment import GeneratedAssessmentRepository
 
 WEEKDAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"]
 
@@ -27,6 +30,7 @@ class UserProgressService:
         self.repo = UserProgressRepository(db)
         self.registration_repo = RegistrationRepository(db)
         self.assessment_repo = VerifiedAssessmentRepository(db)
+        self.generated_assessment_repo = GeneratedAssessmentRepository(db)
 
     def _build_performance_payload(self, calculated_score: int) -> dict:
         if 75 <= calculated_score <= 100:
@@ -117,31 +121,46 @@ class UserProgressService:
     def get_all(self) -> List[UserProgress]:
         return self.list()
 
-    def evaluate_mock_and_process(
-        self,
-        progress_id: int,
-        submission,
-    ) -> UserProgress:
 
+    def evaluate_mock_and_process(self,progress_id: int,submission,) -> UserProgress:
         progress = self.get(progress_id)
 
-        mock_score = getattr(submission, "mock_score", None)
+        generated_assessment = self.generated_assessment_repo.get_by_id(submission.assessment_id)
 
-        if mock_score is not None:
-            updated_data = {
-                "score": mock_score
-            }
-
-            updated_data.update(
-                self._build_performance_payload(mock_score)
+        if not generated_assessment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Generated assessment not found",
             )
 
-            progress = self.repo.update(
-                progress,
-                updated_data,
-            )
+        questions = json.loads(generated_assessment.questions)
 
-        return progress
+        answers_by_index = {
+            answer["question_index"]: answer["selected_index"]
+            for answer in submission.answers
+        }
+
+        correct_count = 0
+
+        for index, question in enumerate(questions):
+            selected_index = answers_by_index.get(index)
+
+            if selected_index == question["correct_index"]:
+                correct_count += 1
+
+        total_questions = len(questions)
+
+        score = (
+            round((correct_count / total_questions) * 100)
+            if total_questions
+            else 0
+        )
+
+        updated_data = {
+            "score": score,
+        }
+
+        return self.repo.update(progress,updated_data,)
 
     def list(self, skip: int = 0, limit: int = 100,) -> List[UserProgress]:
         return self.repo.list(skip, limit)

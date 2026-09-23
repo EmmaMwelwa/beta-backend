@@ -14,3 +14,4 @@ from vuka.models.security import (
     SecurityAlert,
     VerificationDocument,
 )
+
