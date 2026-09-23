@@ -9,7 +9,7 @@ class UserProgress(Base):
     progress_id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("registrations.user_id"), nullable=False)
     assessment_id = Column(Integer, ForeignKey("verified_assessments.assessment_id", ondelete="CASCADE"), nullable=False)
-    score = Column(Integer, nullable=False)
+    score = Column(Integer, nullable=True)
     streak_count = Column(Integer, default=0)
 
     registration = relationship("Registration", back_populates="user_progress")
