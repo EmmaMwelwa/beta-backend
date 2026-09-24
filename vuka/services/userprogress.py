@@ -78,32 +78,42 @@ class UserProgressService:
         return 1
 
     def create(self, payload: UserProgressCreate) -> UserProgress:
-
         if not self.registration_repo.get_registration(payload.user_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found",
             )
 
-        assessment = self.assessment_repo.get(payload.assessment_id)
+        generated_assessment = self.generated_assessment_repo.get_by_id(
+            payload.assessment_id
+        )
 
-        if not assessment:
+        if not generated_assessment:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Verified assessment not found",
+                detail="Generated assessment not found",
             )
+
+        verified_assessment = self.assessment_repo.create(
+            user_id=payload.user_id,
+            generated_assessment_id=generated_assessment.generated_assessment_id,
+            category=generated_assessment.category,
+            score=0,
+        )
 
         streak_count = self._compute_streak(
             payload.user_id,
-            assessment.assessment_date.date(),
+            verified_assessment.assessment_date.date(),
         )
 
-    
-        data = payload.model_dump()
-        data["streak_count"] = streak_count
-
+        data = {
+            "user_id": payload.user_id,
+            "assessment_id": verified_assessment.assessment_id,
+            "score": None,
+            "streak_count": streak_count,
+        }
         return self.repo.create(data)
-
+    
     def get(self, progress_id: int) -> UserProgress:
         db_obj = self.repo.get(progress_id)
 
@@ -123,9 +133,30 @@ class UserProgressService:
 
 
     def evaluate_mock_and_process(self,progress_id: int,submission,) -> UserProgress:
+
         progress = self.get(progress_id)
 
-        generated_assessment = self.generated_assessment_repo.get_by_id(submission.assessment_id)
+        verified_assessment = self.assessment_repo.get(
+            progress.assessment_id
+        )
+        
+        if not verified_assessment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Verified assessment not found",
+            )
+
+        if progress.assessment_id != verified_assessment.assessment_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Assessment does not match this progress record",
+            )
+
+        generated_assessment = (
+            self.generated_assessment_repo.get_by_id(
+                verified_assessment.generated_assessment_id
+            )
+        )
 
         if not generated_assessment:
             raise HTTPException(
@@ -156,12 +187,21 @@ class UserProgressService:
             else 0
         )
 
+        verified_assessment_update = {
+            "score": score,
+        }
+
+        self.assessment_repo.update(
+            verified_assessment.assessment_id,
+            verified_assessment_update,
+        )
+
         updated_data = {
             "score": score,
         }
 
-        return self.repo.update(progress,updated_data,)
-
+        return self.repo.update(progress, updated_data,)
+    
     def list(self, skip: int = 0, limit: int = 100,) -> List[UserProgress]:
         return self.repo.list(skip, limit)
     

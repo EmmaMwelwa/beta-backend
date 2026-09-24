@@ -5,6 +5,7 @@ from typing import Optional, Any
 
 class VerifiedAssessmentCreate(BaseModel):
     user_id: int
+    generated_assessment_id: int
     category: str
     score: int = 0
 

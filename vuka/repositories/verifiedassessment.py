@@ -33,7 +33,11 @@ class VerifiedAssessmentRepository:
         db_assessment = self.get_by_id(assessment_id)
         if not db_assessment:
             return None
-        update_data = assessment_update.model_dump(exclude_unset=True)
+        if hasattr(assessment_update, "model_dump"):
+            update_data = assessment_update.model_dump(exclude_unset=True)
+        else:
+            update_data = assessment_update
+
         for key, value in update_data.items():
             setattr(db_assessment, key, value)
         self.db.commit()

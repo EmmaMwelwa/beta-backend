@@ -28,7 +28,7 @@ class CategoryScore(BaseModel):
 class CompletedAssessment(BaseModel):
    category: str
    assessment_date: date
-   score: int
+   score: Optional[int] = None
 
 class WeeklyActivityDay(BaseModel):
    weekday: str

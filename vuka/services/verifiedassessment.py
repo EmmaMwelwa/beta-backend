@@ -5,9 +5,14 @@ from vuka.schemas.verifiedassessment import VerifiedAssessmentCreate, Assessment
 class VerifiedAssessmentService:
     def __init__(self, db: Session):
         self.repository = VerifiedAssessmentRepository(db)
-
+    
     def create(self, data: VerifiedAssessmentCreate):
-        return self.repository.create(user_id=data.user_id, category=data.category, score=0)
+        return self.repository.create(
+            user_id=data.user_id,
+            generated_assessment_id=data.generated_assessment_id,
+            category=data.category,
+            score=0,
+        )
 
     def get_all(self):
         return self.repository.get_all()
