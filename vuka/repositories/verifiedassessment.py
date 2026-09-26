@@ -7,9 +7,16 @@ class VerifiedAssessmentRepository:
         self.db = db
         self.model = VerifiedAssessment
 
-    def create(self, user_id: int, category: str, score: int = 0):
+    def create(
+        self,
+        user_id: int,
+        generated_assessment_id: int,
+        category: str,
+        score: int = 0
+    ):
         assessment = self.model(
             user_id=user_id,
+            generated_assessment_id=generated_assessment_id,
             category=category,
             score=score,
         )
@@ -33,6 +40,7 @@ class VerifiedAssessmentRepository:
         db_assessment = self.get_by_id(assessment_id)
         if not db_assessment:
             return None
+
         if hasattr(assessment_update, "model_dump"):
             update_data = assessment_update.model_dump(exclude_unset=True)
         else:
@@ -40,6 +48,7 @@ class VerifiedAssessmentRepository:
 
         for key, value in update_data.items():
             setattr(db_assessment, key, value)
+
         self.db.commit()
         self.db.refresh(db_assessment)
         return db_assessment

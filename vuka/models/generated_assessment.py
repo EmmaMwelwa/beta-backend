@@ -18,5 +18,4 @@ class GeneratedAssessment(Base):
     model_used = Column(String(50), nullable=False, default="gemini-2.5-flash")
     generated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     content = relationship("Content", back_populates="generated_assessment")
-    verified_assessments = relationship("VerifiedAssessment", back_populates="generated_assessment"
-    )
+    verified_assessments = relationship("VerifiedAssessment", back_populates="generated_assessment")
