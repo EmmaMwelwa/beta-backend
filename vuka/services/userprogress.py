@@ -116,7 +116,7 @@ class UserProgressService:
         data = {
             "user_id": payload.user_id,
             "assessment_id": verified_assessment.assessment_id,
-            "score": None,
+            "score": 0,
             "streak_count": streak_count,
         }
         return self.repo.create(data)
