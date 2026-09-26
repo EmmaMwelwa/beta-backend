@@ -94,13 +94,20 @@ class UserProgressService:
                 detail="Generated assessment not found",
             )
 
-        verified_assessment = self.assessment_repo.create(
-            user_id=payload.user_id,
-            generated_assessment_id=generated_assessment.generated_assessment_id,
-            category=generated_assessment.category,
-            score=0,
+        verified_assessment = (
+            self.assessment_repo.get_by_user_and_generated_assessment(
+                user_id=payload.user_id,
+                generated_assessment_id=generated_assessment.generated_assessment_id,
+            )
         )
 
+        if not verified_assessment:
+            verified_assessment = self.assessment_repo.create(
+                user_id=payload.user_id,
+                generated_assessment_id=generated_assessment.generated_assessment_id,
+                category=generated_assessment.category,
+                score=0,
+            )
         streak_count = self._compute_streak(
             payload.user_id,
             verified_assessment.assessment_date.date(),

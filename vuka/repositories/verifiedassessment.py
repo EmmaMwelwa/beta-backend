@@ -25,11 +25,21 @@ class VerifiedAssessmentRepository:
         self.db.refresh(assessment)
         return assessment
 
+    def get_by_user_and_generated_assessment(
+        self,
+        user_id: int,
+        generated_assessment_id: int
+    ):
+        return self.db.query(self.model).filter(
+            self.model.user_id == user_id,
+            self.model.generated_assessment_id == generated_assessment_id
+        ).first()
+
     def get_by_id(self, assessment_id: int):
         return self.db.query(self.model).filter(
             self.model.assessment_id == assessment_id
         ).first()
-
+        
     def get(self, assessment_id: int):
         return self.get_by_id(assessment_id)
 
