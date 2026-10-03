@@ -26,6 +26,8 @@ from vuka.routers.generated_assessment import router as generated_assessment_rou
 from vuka.routers import onboarding
 from vuka.routers.verification import router as verification_router
 
+from vuka.routers import settings
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -84,4 +86,5 @@ vuka.include_router(user_progress_router,)
 vuka.include_router(generated_assessment_router,)
 vuka.include_router(opportunity_recommendation.router, prefix="/opportunity-recommendation",)
 vuka.include_router(verification_router,)
+vuka.include_router(settings.router)
 
