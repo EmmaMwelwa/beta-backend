@@ -3,11 +3,20 @@ import smtplib
 from email.message import EmailMessage
 
 
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USERNAME = os.getenv("SMTP_USERNAME")
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 587
+
+SMTP_USERNAME = os.getenv(
+    "SMTP_USERNAME",
+    "wanjirundjoroge@gmail.com",
+)
+
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL")
+
+SMTP_FROM_EMAIL = os.getenv(
+    "SMTP_FROM_EMAIL",
+    "wanjirundjoroge@gmail.com",
+)
 
 
 def send_email(
@@ -16,26 +25,15 @@ def send_email(
     body: str,
 ) -> None:
     if not SMTP_USERNAME:
-        raise RuntimeError(
-            "SMTP_USERNAME is not configured."
-        )
+        raise RuntimeError("SMTP_USERNAME is not configured.")
 
     if not SMTP_PASSWORD:
-        raise RuntimeError(
-            "SMTP_PASSWORD is not configured."
-        )
-
-    if not SMTP_FROM_EMAIL:
-        raise RuntimeError(
-            "SMTP_FROM_EMAIL is not configured."
-        )
+        raise RuntimeError("SMTP_PASSWORD is not configured.")
 
     message = EmailMessage()
-
     message["Subject"] = subject
     message["From"] = SMTP_FROM_EMAIL
     message["To"] = to_email
-
     message.set_content(body)
 
     try:
@@ -45,9 +43,7 @@ def send_email(
             timeout=30,
         ) as server:
             server.ehlo()
-
             server.starttls()
-
             server.ehlo()
 
             server.login(
@@ -59,18 +55,13 @@ def send_email(
 
     except smtplib.SMTPAuthenticationError as exc:
         raise RuntimeError(
-            "SMTP authentication failed. "
-            "Check SMTP_USERNAME and SMTP_PASSWORD."
+            "Gmail authentication failed. "
+            "Check the Gmail address and App Password."
         ) from exc
 
-    except smtplib.SMTPException as exc:
+    except (smtplib.SMTPException, OSError) as exc:
         raise RuntimeError(
-            f"SMTP delivery failed: {exc}"
-        ) from exc
-
-    except OSError as exc:
-        raise RuntimeError(
-            f"Unable to connect to SMTP server: {exc}"
+            f"Unable to send email through Gmail: {exc}"
         ) from exc
 
 
