@@ -1,7 +1,8 @@
+import logging
 import os
 from datetime import datetime, timezone
 
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 
 from vuka.models.registration import Registration
@@ -10,10 +11,13 @@ from vuka.security.password import hash_password, verify_password
 from vuka.services.email import send_email
 
 
+logger = logging.getLogger(__name__)
+
 SUPPORT_EMAIL = os.getenv(
     "SUPPORT_EMAIL",
     "joselynedusabemungu@gmail.com",
 )
+
 
 def change_user_password(
     *,
@@ -43,7 +47,20 @@ def change_user_password(
         user_id=user.user_id,
         success=True,
     )
+
     db.commit()
+
+
+def _send_support_email(
+    *,
+    recipient: str,
+    subject: str,
+    body: str,
+) -> None:
+    try:
+        send_email(recipient, subject, body)
+    except Exception:
+        logger.exception("Failed to send support email.")
 
 
 def create_support_request(
@@ -51,10 +68,13 @@ def create_support_request(
     user: Registration,
     category: str,
     message: str,
+    background_tasks: BackgroundTasks,
 ) -> dict:
     now = datetime.now(timezone.utc)
     ticket_id = int(now.strftime("%y%m%d%H%M%S%f")[:-3])
+
     subject = f"Vuka support request #{ticket_id} - {category}"
+
     body = (
         "A new support request was submitted from the Vuka mobile app.\n\n"
         f"Ticket ID: {ticket_id}\n"
@@ -68,13 +88,12 @@ def create_support_request(
         f"{message.strip()}\n"
     )
 
-    try:
-        send_email(SUPPORT_EMAIL, subject, body)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Support is temporarily unavailable. Please try again later.",
-        ) from exc
+    background_tasks.add_task(
+        _send_support_email,
+        recipient=SUPPORT_EMAIL,
+        subject=subject,
+        body=body,
+    )
 
     return {
         "ticket_id": ticket_id,

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 
 from vuka.dependency import get_current_user
 from vuka.models.registration import Registration
@@ -16,10 +16,12 @@ router = APIRouter(prefix="/support", tags=["Support"])
 )
 def create_ticket(
     payload: SupportTicketCreate,
+    background_tasks: BackgroundTasks,
     current_user: Registration = Depends(get_current_user),
 ):
     return create_support_request(
         user=current_user,
         category=payload.category.value,
         message=payload.message,
+        background_tasks=background_tasks,
     )
