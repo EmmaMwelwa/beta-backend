@@ -1,22 +1,59 @@
+import base64
 import os
-import smtplib
 from email.message import EmailMessage
 
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587
 
-SMTP_USERNAME = os.getenv(
-    "SMTP_USERNAME",
-    "wanjirundjoroge@gmail.com",
+GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
+
+GMAIL_SENDER_EMAIL = os.getenv(
+    "GMAIL_SENDER_EMAIL",
+    "joselyned321@gmail.com",
 )
 
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN")
 
-SMTP_FROM_EMAIL = os.getenv(
-    "SMTP_FROM_EMAIL",
-    "wanjirundjoroge@gmail.com",
-)
+
+def _get_gmail_service():
+    if not GOOGLE_CLIENT_ID:
+        raise RuntimeError(
+            "GOOGLE_CLIENT_ID is not configured."
+        )
+
+    if not GOOGLE_CLIENT_SECRET:
+        raise RuntimeError(
+            "GOOGLE_CLIENT_SECRET is not configured."
+        )
+
+    if not GOOGLE_REFRESH_TOKEN:
+        raise RuntimeError(
+            "GOOGLE_REFRESH_TOKEN is not configured."
+        )
+
+    credentials = Credentials(
+        token=None,
+        refresh_token=GOOGLE_REFRESH_TOKEN,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        scopes=[GMAIL_SEND_SCOPE],
+    )
+
+    if not credentials.valid:
+        credentials.refresh(Request())
+
+    return build(
+        "gmail",
+        "v1",
+        credentials=credentials,
+        cache_discovery=False,
+    )
 
 
 def send_email(
@@ -24,44 +61,36 @@ def send_email(
     subject: str,
     body: str,
 ) -> None:
-    if not SMTP_USERNAME:
-        raise RuntimeError("SMTP_USERNAME is not configured.")
-
-    if not SMTP_PASSWORD:
-        raise RuntimeError("SMTP_PASSWORD is not configured.")
-
     message = EmailMessage()
-    message["Subject"] = subject
-    message["From"] = SMTP_FROM_EMAIL
+
+    message["From"] = GMAIL_SENDER_EMAIL
     message["To"] = to_email
+    message["Subject"] = subject
+
     message.set_content(body)
 
+    encoded_message = base64.urlsafe_b64encode(
+        message.as_bytes()
+    ).decode("utf-8")
+
     try:
-        with smtplib.SMTP(
-            SMTP_HOST,
-            SMTP_PORT,
-            timeout=30,
-        ) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
+        service = _get_gmail_service()
 
-            server.login(
-                SMTP_USERNAME,
-                SMTP_PASSWORD,
-            )
+        service.users().messages().send(
+            userId="me",
+            body={
+                "raw": encoded_message,
+            },
+        ).execute()
 
-            server.send_message(message)
-
-    except smtplib.SMTPAuthenticationError as exc:
+    except HttpError as exc:
         raise RuntimeError(
-            "Gmail authentication failed. "
-            "Check the Gmail address and App Password."
+            f"Gmail API email delivery failed: {exc}"
         ) from exc
 
-    except (smtplib.SMTPException, OSError) as exc:
+    except Exception as exc:
         raise RuntimeError(
-            f"Unable to send email through Gmail: {exc}"
+            f"Unable to send email through Gmail API: {exc}"
         ) from exc
 
 
